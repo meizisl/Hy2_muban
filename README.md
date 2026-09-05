@@ -1,4 +1,4 @@
-#准备工作
+# 准备工作
 ip已经解析到cloudflare
 使用acme dns提前创建token
 
