@@ -13,7 +13,7 @@
   | 查询ech     | /etc/hysteria/ech.pem  |
   | 删除hy      |  bash <(curl -fsSL https://get.hy2.sh/) --remove  |
   | 安装iptables  |  apt install iptables |
-  |  查找指定证书位置  | find / -name "*c.cc.com*" 2>/dev/null  #保留*号  |
+  |  查找指定证书位置  | find / -name "`*c.cc.com*`" 2>/dev/null  #保留*号  |
   | 端口跳跃    |  iptables -t nat -A PREROUTING -p udp --dport 20000:20050 -j DNAT --to-destination :12000  |
 
 
