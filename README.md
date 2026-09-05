@@ -6,6 +6,10 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/meizisl/Hy2_muban/main/install.sh)
 
 ```````
+卸载：
+````````
+bash <(curl -fsSL https://raw.githubusercontent.com/meizisl/Hy2_muban/main/uninstall.sh)
+````````
   | 名称 | 命令 | 
   | ----------- | ------ |
   | 安装        | bash <(curl -fsSL https://get.hy2.sh/) |
