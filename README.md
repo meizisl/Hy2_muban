@@ -1,3 +1,7 @@
+#准备工作
+ip已经解析到cloudflare
+使用acme dns提前创建token
+
 # Hysteria2 
 
 一键安装脚本：
