@@ -1,0 +1,78 @@
+listen: :443
+
+#使用CA证书
+acme:
+  domains:
+    - "cc.xxx.com"  ##域名
+  email: x9@gd.com  ##邮箱
+  type: dns
+  dns:
+    name: cloudflare
+    config:
+      cloudflare_api_token: cfBy370f7  ##黄云token
+#本地证书路径
+#tls:
+#  cert: /etc/hysteria/hy2cert.pem
+#  key: /etc/hysteria/hy2key.pem
+
+
+auth:
+  type: password
+  password: szzzzzz  ##密码
+
+#obfs:
+#  type: salamander 
+#  salamander:
+#    password: 2222gx  ##混淆密码
+
+##ech文件本地路径
+ech:
+  keyPath: /etc/hysteria/ech.pem
+
+quic:
+  initStreamReceiveWindow: 8388608 
+  maxStreamReceiveWindow: 8388608 
+  initConnReceiveWindow: 20971520 
+  maxConnReceiveWindow: 20971520 
+  maxIdleTimeout: 30s 
+  maxIncomingStreams: 1024 
+  disablePathMTUDiscovery: false
+    
+congestion:
+  type: bbr
+  bbrProfile: standard
+
+masquerade:
+  type: proxy
+  proxy:
+    url: https://bing.com
+    rewriteHost: true
+  # ... (上述其他字段)
+  listenHTTP: :80 
+  listenHTTPS: :443 
+  forceHTTPS: true
+
+outbounds:
+  - name: v6_only
+    type: direct
+    direct:
+      mode: 6
+      bindIPv6: 26:573f
+#      fastOpen: false
+#  - name: v4_only
+#    type: direct
+#    direct:
+#      mode: 46
+#      bindIPv4: 183
+#      fastOpen: false
+          
+acl:
+  inline:
+    - reject(geoip:cn)
+    - direct(all)
+
+
+
+
+################################################
+##################################################
