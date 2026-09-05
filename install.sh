@@ -4,6 +4,64 @@
 
 set -e
 
+# ====== CPU 架构检测 ======
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        ARCH="arm64"
+        ;;
+    armv7l|armv7)
+        ARCH="armv7"
+        ;;
+    riscv64)
+        ARCH="riscv64"
+        ;;
+    *)
+        echo "不支持的 CPU 架构: $ARCH"
+        exit 1
+        ;;
+esac
+
+echo "CPU 架构: $ARCH"
+
+# ====== 系统检测 ======
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    echo "无法检测系统类型"
+    exit 1
+fi
+
+echo "系统类型: $OS"
+
+# ====== 包管理器选择 ======
+if command -v apt >/dev/null 2>&1; then
+    PKG="apt"
+elif command -v yum >/dev/null 2>&1; then
+    PKG="yum"
+elif command -v dnf >/dev/null 2>&1; then
+    PKG="dnf"
+elif command -v pacman >/dev/null 2>&1; then
+    PKG="pacman"
+else
+    echo "无法识别包管理器"
+    exit 1
+fi
+
+echo "包管理器: $PKG"
+
+# ====== IPv4 / IPv6 检测 ======
+IPV4=$(curl -s ipv4.ip.sb || curl -s ifconfig.me)
+IPV6=$(curl -s ipv6.ip.sb || echo "")
+
+echo "IPv4: $IPV4"
+echo "IPv6: $IPV6"
+
+
 echo "==============================="
 echo "     Hysteria2 安装向导"
 echo "==============================="
