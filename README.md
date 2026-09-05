@@ -1,6 +1,6 @@
 # 准备工作
-ip已经解析到cloudflare
-使用acme dns提前创建token
+# ip已经解析到cloudflare
+# 要使用acme dns 创建token
 
 # Hysteria2 
 
