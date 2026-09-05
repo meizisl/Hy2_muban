@@ -6,7 +6,7 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/meizisl/Hy2_muban/main/install.sh)
 
 ```````
-  | 名称 | 命令 | 官方  |
+  | 名称 | 命令 | 
   | ----------- | ------ |
   | 安装        | bash <(curl -fsSL https://get.hy2.sh/) |
   | 生成自签证书 | openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 36500 && sudo chown hysteria /etc/hysteria/server.key && sudo chown hysteria /etc/hysteria/server.crt |
