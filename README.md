@@ -34,7 +34,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/meizisl/Hy2_muban/main/unins
 # acme dns
 ```````
 echo 'export CF_Token="你的_Cloudflare_Token"' >> ~/.bashrc
+echo 'export CF_Zone_ID="你的_区域ID_Zone_ID"' >> ~/.bashrc
 echo 'export CF_Account_ID="你的_Account_ID"' >> ~/.bashrc
+
+可省略CF_Account_ID
 
 ```````
 # 
