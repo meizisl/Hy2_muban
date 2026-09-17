@@ -1,100 +1,91 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# ============================================================
-# Hysteria 2 一键安装脚本 (完整修复版)
-# ============================================================
+# 开启严格模式，遇到报错立即停止
+set -e
 
-set -Eeuo pipefail
-
-CONFIG_DIR="/etc/hysteria"
-CONFIG_FILE="${CONFIG_DIR}/config.yaml"
-SERVICE_NAME="hysteria.service"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
-HYSTERIA_BIN="/usr/local/bin/hysteria"
-ACME_HOME="${HOME}/.acme.sh"
-ACME_BIN="${ACME_HOME}/acme.sh"
-CERT_FILE="${CONFIG_DIR}/server.crt"
-KEY_FILE="${CONFIG_DIR}/server.key"
-
-# root 检查
+# 检查是否为 root 权限
 if [ "${EUID}" -ne 0 ]; then
-    echo "错误：请使用 root 权限运行。"
+    echo "错误：请使用 root 权限运行此脚本。"
     exit 1
 fi
 
-trap 'echo ""; echo "错误：脚本执行失败，行号：${LINENO}"; exit 1' ERR
+CONFIG_DIR="/etc/hysteria"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+HYSTERIA_BIN="/usr/local/bin/hysteria"
+SERVICE_NAME="hysteria.service"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 
-# CPU 架构检测
-RAW_ARCH="$(uname -m)"
-case "${RAW_ARCH}" in
-    x86_64|amd64) ARCH="amd64" ;;
-    aarch64|arm64) ARCH="arm64" ;;
-    armv7l|armv7|armhf) ARCH="armv7" ;;
-    i386|i686) ARCH="386" ;;
-    riscv64) ARCH="riscv64" ;;
-    *) echo "错误：不支持的 CPU 架构：${RAW_ARCH}"; exit 1 ;;
-esac
-
-# 安装依赖
+# ============================================================
+# 安装基础依赖
+# ============================================================
 install_deps() {
+    echo "正在检查并安装基础依赖..."
     if command -v apt-get >/dev/null 2>&1; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update && apt-get install -y curl wget tar openssl socat jq ca-certificates cron
+        apt-get update -y && apt-get install -y curl wget tar openssl jq ca-certificates
     elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
         PM=$(command -v dnf || command -v yum)
-        $PM install -y curl wget tar openssl socat jq ca-certificates cronie
-    else
-        echo "错误：不支持的包管理器。"
-        exit 1
+        $PM install -y curl wget tar openssl jq ca-certificates
     fi
 }
 install_deps
 
-# 启动 cron
-if command -v systemctl >/dev/null 2>&1; then
-    systemctl enable --now cron.service 2>/dev/null || systemctl enable --now crond.service 2>/dev/null || true
-fi
-
-mkdir -p "${CONFIG_DIR}"
-chmod 755 "${CONFIG_DIR}"
-
+# ============================================================
+# 第一步：收集用户自定义参数
+# ============================================================
 echo ""
 echo "========================================"
-echo "Hysteria 2 安装向导"
+echo "Hysteria 2 参数配置"
 echo "========================================"
 
-read -r -p "请输入 Hysteria 监听端口 [默认 443]： " PORT
-PORT="${PORT:-443}"
+# 1. 监听端口
+read -r -p "请输入 Hysteria 监听端口 [默认 443]： " INPUT_PORT
+INPUT_PORT="${INPUT_PORT:-443}"
 
-PASSWORD=""
-while [ -z "${PASSWORD}" ]; do
-    read -r -p "请输入 Hysteria 2 认证密码： " PASSWORD
+# 2. 密码
+INPUT_PASSWORD=""
+while [ -z "${INPUT_PASSWORD}" ]; do
+    read -r -p "请输入 Hysteria 2 认证密码： " INPUT_PASSWORD
 done
 
+# 3. 证书模式
 echo ""
 echo "TLS 证书模式："
-echo "1) 自签证书"
-echo "2) Cloudflare DNS-01"
-echo "3) HTTP-01"
-read -r -p "请选择 [1-3]： " CERT_MODE
+echo "1) Hysteria 原生 HTTP-01 (自动 80 端口申请证书，默认)"
+echo "2) Hysteria 原生 Cloudflare DNS-01"
+echo "3) 自签证书"
+read -r -p "请选择 [默认 1]： " CERT_MODE
+CERT_MODE="${CERT_MODE:-1}"
+
+INPUT_DOMAIN=""
+INPUT_EMAIL=""
+INPUT_CF_TOKEN=""
+INPUT_SNI=""
 
 case "${CERT_MODE}" in
     1)
-        CERT_TYPE="self_signed"
-        read -r -p "请输入证书 SNI 域名 [默认 bing.com]： " SNI_DOMAIN
-        SNI_DOMAIN="${SNI_DOMAIN:-bing.com}"
-        DOMAIN="${SNI_DOMAIN}"
+        CERT_TYPE="acme_http"
+        while [ -z "${INPUT_DOMAIN}" ]; do
+            read -r -p "请输入解析到本 VPS 的域名： " INPUT_DOMAIN
+        done
+        read -r -p "请输入邮箱 [默认 admin@${INPUT_DOMAIN}]： " INPUT_EMAIL
+        INPUT_EMAIL="${INPUT_EMAIL:-admin@${INPUT_DOMAIN}}"
         ;;
     2)
         CERT_TYPE="acme_cf"
-        read -r -p "请输入解析到本 VPS 的域名： " DOMAIN
-        read -r -p "请输入证书邮箱： " EMAIL
-        read -r -p "请输入 Cloudflare API Token： " CF_API_TOKEN
+        while [ -z "${INPUT_DOMAIN}" ]; do
+            read -r -p "请输入解析到本 VPS 的域名： " INPUT_DOMAIN
+        done
+        read -r -p "请输入邮箱 [默认 admin@${INPUT_DOMAIN}]： " INPUT_EMAIL
+        INPUT_EMAIL="${INPUT_EMAIL:-admin@${INPUT_DOMAIN}}"
+        while [ -z "${INPUT_CF_TOKEN}" ]; do
+            read -r -p "请输入 Cloudflare API Token： " INPUT_CF_TOKEN
+        done
         ;;
     3)
-        CERT_TYPE="acme_http"
-        read -r -p "请输入解析到本 VPS 的域名： " DOMAIN
-        read -r -p "请输入证书邮箱： " EMAIL
+        CERT_TYPE="self_signed"
+        read -r -p "请输入自签 SNI 域名 [默认 bing.com]： " INPUT_SNI
+        INPUT_SNI="${INPUT_SNI:-bing.com}"
         ;;
     *)
         echo "错误：无效选择。"
@@ -102,6 +93,7 @@ case "${CERT_MODE}" in
         ;;
 esac
 
+# 4. 伪装模式
 echo ""
 echo "Masquerade 伪装模式："
 echo "1) Proxy 反向代理"
@@ -110,119 +102,144 @@ echo "3) StatusCode 状态码"
 read -r -p "请选择 [默认 1]： " MASQ_CHOICE
 MASQ_CHOICE="${MASQ_CHOICE:-1}"
 
+INPUT_MASQ_URL=""
+INPUT_MASQ_DIR=""
+INPUT_MASQ_CODE=""
+
 case "${MASQ_CHOICE}" in
     1)
         MASQ_TYPE="proxy"
-        read -r -p "请输入反代网址 [默认 https://www.bing.com]： " MASQ_URL
-        MASQ_URL="${MASQ_URL:-https://www.bing.com}"
-        [[ ! "${MASQ_URL}" =~ ^https?:// ]] && MASQ_URL="https://${MASQ_URL}"
+        read -r -p "请输入反代网址 [默认 https://www.bing.com]： " INPUT_MASQ_URL
+        INPUT_MASQ_URL="${INPUT_MASQ_URL:-https://www.bing.com}"
+        [[ ! "${INPUT_MASQ_URL}" =~ ^https?:// ]] && INPUT_MASQ_URL="https://${INPUT_MASQ_URL}"
         ;;
     2)
         MASQ_TYPE="file"
-        read -r -p "请输入网站目录 [默认 /var/www/html]： " MASQ_DIR
-        MASQ_DIR="${MASQ_DIR:-/var/www/html}"
-        mkdir -p "${MASQ_DIR}"
-        if [ ! -f "${MASQ_DIR}/index.html" ]; then
-            echo "<html><body><h1>Welcome</h1></body></html>" > "${MASQ_DIR}/index.html"
-        fi
-        chmod -R 755 "${MASQ_DIR}"
+        read -r -p "请输入静态网站目录 [默认 /var/www/html]： " INPUT_MASQ_DIR
+        INPUT_MASQ_DIR="${INPUT_MASQ_DIR:-/var/www/html}"
+        mkdir -p "${INPUT_MASQ_DIR}"
+        [ ! -f "${INPUT_MASQ_DIR}/index.html" ] && echo "<html><body><h1>Welcome</h1></body></html>" > "${INPUT_MASQ_DIR}/index.html"
         ;;
     3)
         MASQ_TYPE="statusCode"
-        read -r -p "请输入 HTTP 状态码 [默认 404]： " MASQ_CODE
-        MASQ_CODE="${MASQ_CODE:-404}"
+        read -r -p "请输入 HTTP 状态码 [默认 404]： " INPUT_MASQ_CODE
+        INPUT_MASQ_CODE="${INPUT_MASQ_CODE:-404}"
         ;;
     *)
         MASQ_TYPE="proxy"
-        MASQ_URL="https://www.bing.com"
+        INPUT_MASQ_URL="https://www.bing.com"
         ;;
 esac
 
-# 安装 Hysteria
+# ============================================================
+# 第二步：安装 Hysteria 2 主程序
+# ============================================================
+echo ""
+echo "========================================"
+echo "安装 Hysteria 2 主程序"
+echo "========================================"
+
 if [ ! -x "${HYSTERIA_BIN}" ]; then
-    echo "正在使用官方脚本安装 Hysteria 2..."
     HYSTERIA_USER=root bash <(curl -fsSL https://get.hy2.sh/)
 fi
 
-# 生成 TLS 证书
-if [ "${CERT_TYPE}" = "self_signed" ]; then
-    echo "生成自签证书..."
+mkdir -p "${CONFIG_DIR}"
+chmod 755 "${CONFIG_DIR}"
+
+# ============================================================
+# 第三步：强制重写配置文件（清空官方默认模板）
+# ============================================================
+echo ""
+echo "正在写入自定义配置至 ${CONFIG_FILE}..."
+
+# 删除旧配置或官方安装自带的默认文件
+rm -f "${CONFIG_FILE}"
+
+# 1. 基础配置（监听端口与密码）
+cat <<EOF> "${CONFIG_FILE}"
+listen: :${INPUT_PORT}
+
+auth:
+  type: password
+  password: "${INPUT_PASSWORD}"
+EOF
+
+# 2. 证书/ACME 配置
+if [ "${CERT_TYPE}" = "acme_http" ]; then
+    cat <<EOF>> "${CONFIG_FILE}"
+
+acme:
+  domains:
+    - ${INPUT_DOMAIN}
+  email: ${INPUT_EMAIL}
+EOF
+
+elif [ "${CERT_TYPE}" = "acme_cf" ]; then
+    cat <<EOF>> "${CONFIG_FILE}"
+
+acme:
+  domains:
+    - ${INPUT_DOMAIN}
+  email: ${INPUT_EMAIL}
+  dns:
+    name: cloudflare
+    config:
+      CF_DNS_API_TOKEN: "${INPUT_CF_TOKEN}"
+EOF
+
+elif [ "${CERT_TYPE}" = "self_signed" ]; then
+    CERT_FILE="${CONFIG_DIR}/server.crt"
+    KEY_FILE="${CONFIG_DIR}/server.key"
     openssl req -x509 -nodes -newkey rsa:2048 \
         -keyout "${KEY_FILE}" -out "${CERT_FILE}" \
-        -days 3650 -subj "/CN=${SNI_DOMAIN}"
+        -days 3650 -subj "/CN=${INPUT_SNI}" >/dev/null 2>&1
     chmod 600 "${KEY_FILE}"
-elif [ "${CERT_TYPE}" = "acme_cf" ] || [ "${CERT_TYPE}" = "acme_http" ]; then
-    if [ ! -x "${ACME_BIN}" ]; then
-        curl -fsSL https://get.acme.sh | sh -s email="${EMAIL}"
-    fi
-    "${ACME_BIN}" --set-default-ca --server letsencrypt
-
-    if [ "${CERT_TYPE}" = "acme_cf" ]; then
-        export CF_Token="${CF_API_TOKEN}"
-        "${ACME_BIN}" --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256
-    else
-        "${ACME_BIN}" --issue --standalone -d "${DOMAIN}" --keylength ec-256
-    fi
-
-    "${ACME_BIN}" --install-cert -d "${DOMAIN}" --ecc \
-        --key-file "${KEY_FILE}" \
-        --fullchain-file "${CERT_FILE}" \
-        --reloadcmd "systemctl restart ${SERVICE_NAME}"
-    chmod 600 "${KEY_FILE}"
-fi
-
-# ============================================================
-# 正确生成 Hysteria 2 配置文件 (修复核心 YAML 语法)
-# ============================================================
-echo "正在写入配置文件 ${CONFIG_FILE}..."
-
-cat > "${CONFIG_FILE}" <<EOF
-listen: :${PORT}
+    
+    cat <<EOF>> "${CONFIG_FILE}"
 
 tls:
   cert: ${CERT_FILE}
   key: ${KEY_FILE}
-
-auth:
-  type: password
-  password: "${PASSWORD}"
 EOF
+fi
 
-# 写入伪装配置
+# 3. 伪装配置
 case "${MASQ_TYPE}" in
     proxy)
-        cat >> "${CONFIG_FILE}" <<EOF
+        cat <<EOF>> "${CONFIG_FILE}"
 
 masquerade:
   type: proxy
   proxy:
-    url: ${MASQ_URL}
+    url: ${INPUT_MASQ_URL}
     rewriteHost: true
 EOF
         ;;
     file)
-        cat >> "${CONFIG_FILE}" <<EOF
+        cat <<EOF>> "${CONFIG_FILE}"
 
 masquerade:
   type: file
   file:
-    dir: ${MASQ_DIR}
+    dir: ${INPUT_MASQ_DIR}
 EOF
         ;;
     statusCode)
-        cat >> "${CONFIG_FILE}" <<EOF
+        cat <<EOF>> "${CONFIG_FILE}"
 
 masquerade:
   type: statusCode
-  statusCode: ${MASQ_CODE}
+  statusCode: ${INPUT_MASQ_CODE}
 EOF
         ;;
 esac
 
 chmod 600 "${CONFIG_FILE}"
 
-# 统一配置 Systemd 服务
-cat > "${SERVICE_FILE}" <<EOF
+# ============================================================
+# 第四步：配置 Systemd 服务并启动
+# ============================================================
+cat <<EOF> "${SERVICE_FILE}"
 [Unit]
 Description=Hysteria 2 Server Service
 After=network.target network-online.target nss-lookup.target
@@ -243,22 +260,18 @@ EOF
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
 
-# 校验并启动
-echo "检查配置正确性..."
+echo ""
+echo "检查配置文件语法..."
 if "${HYSTERIA_BIN}" check -c "${CONFIG_FILE}"; then
-    echo "配置校验成功，正在启动服务..."
     systemctl restart "${SERVICE_NAME}"
     sleep 2
-    if systemctl is-active --quiet "${SERVICE_NAME}"; then
-        echo "========================================"
-        echo "Hysteria 2 部署成功并已正常启动！"
-        echo "配置文件已准确保存至：${CONFIG_FILE}"
-        echo "========================================"
-    else
-        echo "启动失败，请检查日志：journalctl -u ${SERVICE_NAME} -e"
-        exit 1
-    fi
+    echo "========================================"
+    echo "【安装成功】以下是为您精准生成的 ${CONFIG_FILE} 内容："
+    echo "========================================"
+    cat "${CONFIG_FILE}"
+    echo "========================================"
 else
-    echo "配置检查失败，请检查上面输出的信息！"
+    echo "配置文件语法检查失败！生成的配置内容如下："
+    cat "${CONFIG_FILE}"
     exit 1
 fi
