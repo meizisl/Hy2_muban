@@ -213,7 +213,7 @@ fi
 PASSWORD=""
 
 while [ -z "${PASSWORD}" ]; do
-    read -r -s -p "请输入 Hysteria 2 认证密码： " PASSWORD
+    read -r -p "请输入 Hysteria 2 认证密码： " PASSWORD
     echo
 done
 
@@ -259,7 +259,7 @@ case "${CERT_MODE}" in
         done
 
         while [ -z "${CF_API_TOKEN:-}" ]; do
-            read -r -s -p \
+            read -r -p \
                 "请输入 Cloudflare API Token： " \
                 CF_API_TOKEN
             echo
