@@ -68,6 +68,7 @@ outbounds:
           
 acl:
   inline:
+    - v6_only(all)
     - reject(geoip:cn)
     - direct(all)
 
