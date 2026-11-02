@@ -30,7 +30,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/meizisl/Hy2_muban/main/unins
   | 安装iptables  |  apt install iptables |
   |  查找指定证书位置  | find / -name "`*替换域名*`" 2>/dev/null  #保留*号  |
   | 端口跳跃    |  iptables -t nat -A PREROUTING -p udp --dport 20000:20050 -j DNAT --to-destination :12000  
-ip6tables -t nat -A PREROUTING -p udp --dport 20000:20050 -j DNAT --to-destination :12000  |
+                  ip6tables -t nat -A PREROUTING -p udp --dport 20000:20050 -j DNAT --to-destination :12000  |
 
 # acme dns
 ```````
