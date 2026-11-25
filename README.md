@@ -48,9 +48,11 @@ source ~/.bashrc
 
 ````````
 apt update && apt install -y cron
+
 systemctl enable --now cron
 
 curl https://get.acme.sh | sh -s email=xll@l.com
+
 source ~/.bashrc
 `````````````````
 
