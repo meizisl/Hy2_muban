@@ -47,7 +47,11 @@ source ~/.bashrc
 # 若使用 zsh 则执行: source ~/.zshrc
 
 ````````
-
+apt update && apt install -y cron
+systemctl enable --now cron
+curl https://get.acme.sh | sh -s email=xiaomf1969@gmail.com
+source ~/.bashrc
+`````````````````
 
 
 
