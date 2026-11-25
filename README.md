@@ -55,20 +55,3 @@ curl https://get.acme.sh | sh -s email=xll@l.com
 
 source ~/.bashrc
 `````````````````
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
